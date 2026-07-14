@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>持仓看板 · Portfolio Bento</title>
+<style>
+  :root {
+    --bg: #050507; --panel: rgba(18,18,22,0.65); --panel-hover: rgba(26,26,32,0.8);
+    --line: rgba(255,255,255,0.06); --line-active: rgba(255,255,255,0.12);
+    --text: #f5f5f7; --muted: #86868b; --up: #ff453a; --down: #32d74b;
+    --flat: #eaeaea; --blue: #0a84ff; --yellow: #ffd60a; --glass-blur: blur(16px);
+  }
+  *{box-sizing:border-box} html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:inherit} .wrap{max-width:1440px;margin:0 auto;padding:24px 28px 80px}
+  .up{color:var(--up)!important} .down{color:var(--down)!important} .flat{color:var(--flat)} .muted{color:var(--muted)}
+  .mono{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  @keyframes pulseUp{0%{background:rgba(255,69,58,0.25);color:#fff;border-radius:4px}100%{background:transparent}}
+  @keyframes pulseDown{0%{background:rgba(50,215,75,0.25);color:#fff;border-radius:4px}100%{background:transparent}}
+  .flash-up{animation:pulseUp 0.8s ease-out} .flash-down{animation:pulseDown 0.8s ease-out}
+  .hero{position:relative;overflow:hidden;display:grid;grid-template-columns:1fr auto;gap:24px;align-items:end;padding:32px;border:1px solid var(--line);border-radius:20px;background:linear-gradient(135deg,rgba(20,20,25,0.7) 0%,rgba(10,10,12,0.8) 100%);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);transition:border-color 0.3s}
+  .hero::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:0}
+  .hero.pulse-up::after{animation:flashUp 0.8s cubic-bezier(0.1,0.8,0.3,1)} .hero.pulse-down::after{animation:flashDown 0.8s cubic-bezier(0.1,0.8,0.3,1)}
+  @keyframes flashUp{0%{opacity:.3;background:radial-gradient(circle at 30% 50%,rgba(255,69,58,.15) 0%,transparent 60%)}100%{opacity:0}}
+  @keyframes flashDown{0%{opacity:.3;background:radial-gradient(circle at 30% 50%,rgba(50,215,75,.15) 0%,transparent 60%)}100%{opacity:0}}
+  .hero-title{font-size:12px;color:var(--muted);letter-spacing:2px;margin-bottom:16px;display:flex;align-items:center;gap:12px}
+  .hero-title .eye-btn{cursor:pointer;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--muted);display:inline-flex;align-items:center;gap:6px;font-size:11px}
+  .hero-title .eye-btn svg{width:14px;height:14px;stroke:currentColor;stroke-width:2;fill:none}
+  body.masked .mask{color:transparent!important;text-shadow:0 0 10px rgba(255,255,255,.4);user-select:none;filter:blur(6px)}
+  .hero-nums{display:flex;gap:64px;flex-wrap:wrap;align-items:baseline}
+  .hero-num .label{font-size:11px;color:var(--muted);letter-spacing:1.5px;margin-bottom:8px}
+  .hero-num .val{font-size:56px;font-weight:700;letter-spacing:-1px;line-height:1}
+  .hero-num .cur{font-size:18px;color:var(--muted);margin-left:8px}
+  .hero-delta{margin-top:18px;font-size:14px;display:flex;align-items:center;gap:12px}
+  .hero-chart{margin-top:24px;position:relative;height:64px;border-top:1px dashed var(--line);padding-top:12px}
+  .hero-chart svg{display:block;width:100%;height:52px;overflow:visible}
+  .hero-chart-stats{position:absolute;right:0;top:12px;font-size:11px;color:var(--muted);text-align:right;line-height:1.6}
+  .hero-goal{text-align:right;min-width:280px;background:rgba(255,255,255,.02);padding:16px;border-radius:12px;border:1px solid var(--line)}
+  .hero-goal .g-line{color:var(--muted);font-size:12px;margin-bottom:6px}
+  .hero-goal .g-pct{font-size:26px;font-weight:600}
+  .hero-goal .bar{margin-top:10px;height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}
+  .hero-goal .bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--up),#ff9f0a);transition:width .6s}
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px}
+  .kpi{padding:24px;border:1px solid var(--line);border-radius:16px;background:var(--panel);backdrop-filter:var(--glass-blur)}
+  .kpi .k-label{font-size:11px;color:var(--muted);letter-spacing:1.5px;margin-bottom:12px}
+  .kpi .k-val{font-size:32px;font-weight:700}
+  .kpi .k-sub{margin-top:8px;font-size:12px;color:var(--muted)}
+  .section-title{display:flex;align-items:center;gap:12px;margin:40px 4px 16px}
+  .section-title h2{margin:0;font-size:15px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#fff}
+  .section-title .hint{color:var(--muted);font-size:12px}
+  .bento-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:16px}
+  .bento-box{border:1px solid var(--line);border-radius:20px;background:var(--panel);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);overflow:hidden;transition:border-color .4s,box-shadow .4s}
+  .bento-box.pulse-up{border-color:rgba(255,69,58,.4);box-shadow:0 0 20px rgba(255,69,58,.08)}
+  .bento-box.pulse-down{border-color:rgba(50,215,75,.4);box-shadow:0 0 20px rgba(50,215,75,.08)}
+  .bento-header{padding:24px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--line);display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  .bento-header .bh-title{grid-column:1/-1;font-size:16px;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .bento-header .bh-title span{font-size:11px;font-weight:500;padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.08);color:var(--muted)}
+  .bento-header .bh-meta{display:flex;flex-direction:column;gap:4px}
+  .bento-header .bh-meta .lbl{font-size:11px;color:var(--muted);letter-spacing:.5px}
+  .bento-header .bh-meta .val{font-size:18px;font-weight:700;color:#fff}
+  .bento-list{padding:12px 20px 24px;display:flex;flex-direction:column;gap:2px}
+  .stk-row{display:grid;grid-template-columns:2.2fr 1.2fr 1.2fr 1.5fr 1.4fr;align-items:center;padding:14px 8px;border-bottom:1px solid rgba(255,255,255,.03);transition:background .2s}
+  .stk-row:last-child{border-bottom:none} .stk-row:hover{background:rgba(255,255,255,.02);border-radius:10px}
+  .stk-cell{display:flex;flex-direction:column;justify-content:center}
+  .stk-cell.right{text-align:right;align-items:flex-end}
+  .stk-main-title{font-weight:600;color:#fff;font-size:13.5px}
+  .stk-sub-title{font-size:11px;color:var(--muted);margin-top:3px}
+  .stk-primary-num{font-size:14px;font-weight:600}
+  .stk-secondary-num{font-size:11px;color:var(--muted);margin-top:3px}
+  .spark{display:inline-block;vertical-align:middle;opacity:.75}
+  .watch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
+  .watch-card{padding:18px;border:1px solid var(--line);border-radius:14px;background:var(--panel);backdrop-filter:var(--glass-blur)}
+  .watch-card .w-name{font-weight:600;font-size:13.5px;color:#fff}
+  .watch-card .w-code{color:var(--muted);font-size:11px;margin-top:3px}
+  .watch-card .w-price{font-size:22px;font-weight:700;margin-top:12px}
+  .watch-card .w-chg{margin-top:6px;font-size:12px;font-weight:600}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;color:var(--muted);font-size:11px}
+  .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--down);margin-right:6px;animation:blink 1.6s infinite}
+  @keyframes blink{50%{opacity:.4}}
+
+  /* TJ panel */
+  .tj-strip{display:flex;align-items:stretch;margin:20px 0 14px;border:1px solid rgba(255,214,10,.25);border-radius:14px;background:linear-gradient(135deg,rgba(255,214,10,.06) 0%,rgba(255,149,0,.03) 100%);overflow:hidden}
+  .tj-strip .tj-strip-tag{display:flex;align-items:center;padding:0 16px;background:rgba(255,214,10,.10);font-size:10px;font-weight:700;letter-spacing:2px;color:var(--yellow);border-right:1px solid rgba(255,214,10,.20);white-space:nowrap}
+  .tj-strip .tj-strip-body{padding:14px 18px;flex:1;font-size:14px;font-weight:500;color:#f5f5f7;line-height:1.55}
+  .tj-strip .tj-strip-meta{padding:0 16px;display:flex;align-items:center;font-size:11px;color:var(--muted);font-family:monospace;border-left:1px solid var(--line)}
+  .tj-strip .tj-strip-meta .tj-fresh{color:var(--down);font-weight:600}
+  .tj-strip .tj-strip-meta .tj-stale{color:var(--up);font-weight:600}
+  .a-source{display:inline-block;padding:2px 6px;margin-left:8px;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:4px;font-family:monospace;font-size:10px;color:var(--muted);font-weight:600;vertical-align:middle}
+  .a-source.v-intra{background:rgba(255,214,10,.08);border-color:rgba(255,214,10,.25);color:var(--yellow)}
+  .action-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:16px}
+  .action{padding:20px;border-radius:14px;background:rgba(18,18,22,.55);border:1px solid var(--line);backdrop-filter:var(--glass-blur);transition:all .2s}
+  .action:hover{border-color:var(--line-active);background:rgba(30,30,38,.7);transform:translateY(-2px)}
+  .action .a-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+  .action .a-tag{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:8px;font-size:10px;font-weight:600;letter-spacing:1px;background:rgba(255,255,255,.04);color:var(--muted);border:1px solid var(--line)}
+  .action .a-tag-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+  .action .a-metric{font-family:monospace;font-size:11px;color:var(--muted)}
+  .action .a-metric .m-val{color:#fff;font-weight:600;margin-left:2px}
+  .action .a-name{font-weight:600;font-size:15px;margin-bottom:6px;color:#fff;display:flex;align-items:baseline;gap:8px}
+  .action .a-name .a-stock{color:var(--muted);font-size:12px;font-weight:400}
+  .action .a-quote{margin:10px 0 12px;padding:10px 12px;background:rgba(255,255,255,.03);border-left:2px solid var(--yellow);border-radius:4px;font-size:12px;color:#a1a1a6;line-height:1.6;font-style:italic}
+  .action .a-quote::before{content:"TJ 原话  ";font-style:normal;color:var(--yellow);font-weight:700;font-size:10px;letter-spacing:1px}
+  .action .a-fieldset{display:grid;gap:8px;margin-top:8px;font-size:12px}
+  .action .a-fieldset .a-row{display:grid;grid-template-columns:50px 1fr;gap:8px;align-items:baseline;line-height:1.5}
+  .action .a-fieldset .a-label{font-size:10px;font-weight:700;letter-spacing:1px;color:var(--muted);text-transform:uppercase}
+  .action .a-fieldset .a-text{color:#d1d1d6}
+  .action.tj-buy .a-tag{color:var(--down);background:rgba(50,215,75,.08);border-color:rgba(50,215,75,.25)}
+  .action.tj-hold .a-tag{color:var(--blue);background:rgba(10,132,255,.08);border-color:rgba(10,132,255,.20)}
+  .action.tj-watch .a-tag{color:var(--yellow);background:rgba(255,214,10,.08);border-color:rgba(255,214,10,.20)}
+  .action.tj-trim .a-tag{color:#ff9500;background:rgba(255,149,0,.08);border-color:rgba(255,149,0,.20)}
+  .action.tj-exit .a-tag{color:var(--up);background:rgba(255,69,58,.08);border-color:rgba(255,69,58,.20)}
+  .action.tj-buy .hi{color:#6be488;background:rgba(50,215,75,.10)}
+  .action .hi{display:inline-block;padding:2px 6px;border-radius:5px;font-weight:600;color:#fff;background:rgba(255,255,255,.06)}
+  .action .num{font-family:monospace;font-weight:600;color:#fff}
+  .a-change-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;margin-bottom:10px;background:linear-gradient(90deg,rgba(255,214,10,.12) 0%,rgba(255,214,10,.04) 100%);border:1px solid rgba(255,214,10,.35);border-radius:6px;font-size:11px;font-weight:600;letter-spacing:.5px;color:var(--yellow)}
+  .a-change-badge::before{content:"⚡";font-size:12px}
+  .a-change-badge .ver{font-family:monospace;opacity:.7;margin-left:4px}
+
+  @media(max-width:1024px){.bento-grid{grid-template-columns:1fr}.hero{grid-template-columns:1fr;padding:24px}.kpis{grid-template-columns:1fr}.stk-row{grid-template-columns:1.8fr 1fr 1fr 1fr 1fr;font-size:11px}.action-list{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<script>
+const CONFIG = {
+  fxUSDHKD: 7.84,
+  targetUSD: 336102, // 合计: 富途 81000 + 中银 HKD 2M ÷ 7.84 = 255,102
+  accounts: {
+    futu: { name: "富途证券", code: "FUTU", accountNo: "3903", targetUSD: 81000,  cashUSD: 42291.20, cashHKD: 0.00 },
+    boci: { name: "中银国际", code: "BOCI", accountNo: "82668712000", targetHKD: 2000000, targetUSD: 255102, cashUSD: 85489.48, cashHKD: 414.82 }
+  },
+  holdings: [
+    // ============ 富途 (3903, 保证金综合账户, 黑底 UI) ============
+    { symbol: "NIO",     name: "蔚来",         shares: 3000, costPrice: 5.207,   market: "US", sector: "新能源", account: "futu" },
+    { symbol: "SKHY",    name: "SK海力士",     shares: 50,   costPrice: 162.16,  market: "US", sector: "存储/HBM",account: "futu" },
+    { symbol: "FCX",     name: "麦克莫兰铜金", shares: 70,   costPrice: 68.169,  market: "US", sector: "有色",   account: "futu" },
+    { symbol: "NBIS",    name: "Nebius",       shares: 20,   costPrice: 233.913, market: "US", sector: "AI算力", account: "futu" },
+    { symbol: "XE",      name: "X-Energy",     shares: 130,  costPrice: 16.352,  market: "US", sector: "核能",   account: "futu" },
+    { symbol: "01810.HK", name: "小米集团-W",  shares: 400,  costPrice: 28.14,   market: "HK", sector: "科技",   account: "futu" },
+    { symbol: "03033.HK", name: "南方恒生科技",shares: 2200, costPrice: 5.525,   market: "HK", sector: "科技ETF",account: "futu" },
+
+    // ============ 中银国际 (82668712000, 孖展账户, 白底 UI) ============
+    { symbol: "00700.HK", name: "腾讯控股",     shares: 800,  costPrice: 515.311, market: "HK", sector: "科技",   account: "boci" },
+    { symbol: "01810.HK", name: "小米集团-W",   shares: 1200, costPrice: 28.612,  market: "HK", sector: "科技",   account: "boci" },
+    { symbol: "CRM",     name: "赛富时",       shares: 30,   costPrice: 193.13,  market: "US", sector: "软件",   account: "boci" },
+    { symbol: "ETN",     name: "伊顿",         shares: 15,   costPrice: 401.33,  market: "US", sector: "电力",   account: "boci" },
+    { symbol: "GEV",     name: "GE Vernova",   shares: 5,    costPrice: 1064.00, market: "US", sector: "能源",   account: "boci" },
+    { symbol: "GOOGL",   name: "谷歌 A",       shares: 250,  costPrice: 389.53,  market: "US", sector: "云/AI",  account: "boci" },
+    { symbol: "MSFT",    name: "微软",         shares: 25,   costPrice: 415.65,  market: "US", sector: "云/AI",  account: "boci" },
+    { symbol: "SPCX",    name: "SpaceX",       shares: 5,    costPrice: -2.18,   market: "US", sector: "太空",   account: "boci" },
+  ],
+  watchlist: [
+    { symbol: "SKHY",  name: "SK海力士",          market: "US" },{ symbol: "AMZN",  name: "亚马逊",            market: "US" },
+    { symbol: "AIPO",  name: "AI电力基建ETF",     market: "US" },{ symbol: "AXP",   name: "美国运通",          market: "US" },
+    { symbol: "IBIT",  name: "iShares 比特币",    market: "US" },{ symbol: "TCOM",  name: "携程",              market: "US" },
+    { symbol: "PDD",   name: "拼多多",            market: "US" },{ symbol: "NBIS",  name: "Nebius",            market: "US" },
+    { symbol: "TSEM",  name: "Tower 半导体",      market: "US" },{ symbol: "BUG",   name: "网络安全ETF",       market: "US" },
+    { symbol: "GOOGL", name: "谷歌-A",            market: "US" },{ symbol: "SOXX",  name: "费城半导体ETF",     market: "US" },
+    { symbol: "GEV",   name: "GE Vernova",        market: "US" },{ symbol: "DRAM",  name: "Roundhill DRAM ETF", market: "US" },
+    { symbol: "COHR",  name: "Coherent",          market: "US" },{ symbol: "CIEN",  name: "Ciena",             market: "US" },
+    { symbol: "ETN",   name: "伊顿电气",          market: "US" },{ symbol: "MSFT",  name: "微软",              market: "US" },
+    { symbol: "MU",    name: "美光科技",          market: "US" },
+  ],
+  refreshMs: 30000,
+};
+</script>
+
+<div class="wrap">
+  <div class="topbar"><div><span class="dot"></span><span id="clock">--:--:--</span> · 数据源: 腾讯财经 · Bento 便当盒响应看板</div><div id="lastUpdate">上次更新: —</div></div>
+
+  <div class="hero" id="hero">
+    <div>
+      <div class="hero-title"><span>TOTAL PORTFOLIO ASSETS · 跨境总资产看板</span>
+        <button class="eye-btn" id="privacyBtn"><svg id="eyeOpen" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg id="eyeClosed" viewBox="0 0 24 24" style="display:none"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><line x1="4" y1="20" x2="20" y2="4"/></svg><span id="privacyLabel">隐藏</span></button>
+      </div>
+      <div class="hero-nums">
+        <div class="hero-num"><div class="label">合并总资产 (USD)</div><div class="val mono" id="totalUSDBox"><span id="totalUSD" class="mask">—</span><span class="cur">USD</span></div></div>
+        <div class="hero-num"><div class="label">等值港币 (HKD)</div><div class="val mono" id="totalHKDBox"><span id="totalHKD" class="mask">—</span><span class="cur">HKD</span></div></div>
+      </div>
+      <div class="hero-delta" id="heroDelta"><span id="heroDeltaMain" class="muted">等待数据载入中…</span></div>
+      <div class="hero-chart"><div class="hero-chart-stats mono"><div><span style="opacity:.5">HIGH</span> <span class="mask" id="chartHigh">—</span></div><div><span style="opacity:.5">LOW</span> <span class="mask" id="chartLow">—</span></div></div><div id="heroChart" class="hero-chart-empty">资产流向动态记录中…</div></div>
+    </div>
+    <div class="hero-goal"><div class="g-line" id="goalLine">合计目标 USD 336,102 (富途 81K + 中银 HKD 2M)</div><div class="g-pct"><span id="goalPct">—</span><span style="color:var(--muted);font-size:13px;margin-left:8px">已达成</span></div><div class="bar"><i id="goalBar" style="width:0%"></i></div><div class="g-line" style="margin-top:10px">距目标差 <span id="goalDiff" class="mono mask">—</span> USD</div></div>
+  </div>
+
+  <div class="kpis"><div class="kpi"><div class="k-label">合计证券市值</div><div class="k-val mono mask" id="mktValUSD">—</div><div class="k-sub">两仓现金: <span id="cashTotalUSD" class="mono mask">—</span> USD</div></div><div class="kpi"><div class="k-label">累计持仓总盈亏</div><div class="k-val mono mask" id="totalPL">—</div><div class="k-sub">总收益率: <span id="totalPLPct" class="mono">—</span></div></div><div class="kpi"><div class="k-label">全局今日净盈亏</div><div class="k-val mono mask" id="todayPL">—</div><div class="k-sub">今日波幅: <span id="todayPLPct" class="mono">—</span></div></div></div>
+
+  <div class="section-title"><h2>ALL HOLDINGS · 便当盒分布式持仓</h2><span class="hint">左栏富途证券 | 右栏中银国际 · 按市值自动重排</span></div>
+  <div class="bento-grid">
+    <div class="bento-box" id="bento_futu"><div class="bento-header"><div class="bh-title">富途证券 <span>3903 · 目标 $81K</span></div><div class="bh-meta"><div class="lbl">总资产 (USD)</div><div class="val mono mask" id="futu_total">—</div></div><div class="bh-meta"><div class="lbl">证券市值</div><div class="val mono mask" id="futu_mkt">—</div></div><div class="bh-meta"><div class="lbl">可用现金 / 达成</div><div class="val mono"><span class="mask" id="futu_cash">—</span><span style="font-size:11px;color:var(--muted);margin-left:6px" id="futu_goalPct">—</span></div></div></div><div class="bento-list" id="futu_list"><div class="muted" style="padding:40px;text-align:center">计算最新行情中…</div></div></div>
+    <div class="bento-box" id="bento_boci"><div class="bento-header"><div class="bh-title">中银国际 <span>82668712000 · 目标 HKD 2M</span></div><div class="bh-meta"><div class="lbl">总资产 (USD)</div><div class="val mono mask" id="boci_total">—</div></div><div class="bh-meta"><div class="lbl">证券市值</div><div class="val mono mask" id="boci_mkt">—</div></div><div class="bh-meta"><div class="lbl">可用现金 / 达成</div><div class="val mono"><span class="mask" id="boci_cash">—</span><span style="font-size:11px;color:var(--muted);margin-left:6px" id="boci_goalPct">—</span></div></div></div><div class="bento-list" id="boci_list"><div class="muted" style="padding:40px;text-align:center">计算最新行情中…</div></div></div>
+  </div>
+
+  <div class="section-title"><h2>WATCHLIST · 观察仓</h2><span class="hint">19 只核心标的 · 尚未建仓</span></div>
+  <div class="watch-grid" id="watchGrid"><div class="muted" style="padding:12px">加载中…</div></div>
+
+  <div class="section-title" style="margin-top:28px"><h2>TJ ADVISORY · TJ 判断驱动</h2><span class="hint" id="tjHint">加载 TJ 观点…</span></div>
+  <div class="tj-strip" id="tjStrip"><div class="tj-strip-tag">本周纪律</div><div class="tj-strip-body" id="tjDiscipline">加载中…</div><div class="tj-strip-meta" id="tjFreshness">—</div></div>
+  <div class="action-list" id="actionList"><div class="muted" style="padding:12px">生成中…</div></div>
+</div>
+
+<script>
+const prevPriceCache = {}; const accountAssetCache = {futu:null,boci:null};
+function toTencentCode(s,m){if(m==="HK"||/\.HK$/i.test(s))return"hk"+s.replace(/\.HK$/i,"").padStart(5,"0");return"us"+s.toUpperCase()}
+function parseTencent(v,r){var p=r.split("~");if(p.length<10)return null;var px=parseFloat(p[3]),pc=parseFloat(p[4]);return{price:px,prevClose:pc,change:parseFloat(p[31]||(px-pc)),changePct:parseFloat(p[32]||((px-pc)/pc*100))}}
+function fetchQuotes(cs){return new Promise(function(rs){if(cs.length===0){rs({});return}var s=document.createElement("script");s.charset="gbk";s.src="https://qt.gtimg.cn/q="+cs.join(",")+"&_="+Date.now();s.onload=s.onerror=function(){var r={};cs.forEach(function(c){var raw=window["v_"+c];if(typeof raw==="string"){var q=parseTencent(c,raw);if(q)r[c]=q}});s.remove();rs(r)};document.head.appendChild(s)})}
+var priceHistory={};function pushHistory(c,p){if(!priceHistory[c])priceHistory[c]=[];if(priceHistory[c].length===0||priceHistory[c][priceHistory[c].length-1]!==p)priceHistory[c].push(p);if(priceHistory[c].length>40)priceHistory[c].shift()}
+function sparkSVG(c,chg){var pts=priceHistory[c]||[];if(pts.length<2)return'<svg width="50" height="16"></svg>';var mn=Math.min.apply(null,pts),mx=Math.max.apply(null,pts),r=mx-mn||1,st=50/(pts.length-1),p=pts.map(function(v,i){return(i===0?"M":"L")+(i*st).toFixed(1)+" "+(16-((v-mn)/r)*14-1).toFixed(1)}).join(" ");return'<svg class="spark" width="50" height="16"><path d="'+p+'" fill="none" stroke="'+(chg>0?"var(--up)":"var(--down)")+'" stroke-width="1.2"/></svg>'}
+var fmt=function(n,d){d=d||2;return(n===null||isNaN(n))?"—":n.toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d})};
+var signCls=function(v){return v>0?"up":v<0?"down":"flat"};
+var signPrefix=function(v){return v>0?"+":v<0?"":""};
+</script>
+
+<script>
+/* ============ TJ_ADVICE v714 ============ */
+const TJ_ADVICE = {
+  version: "v714", baselineVer: "v711", intradayVer: "v714", validUntil: "2026-07-18",
+  baseline: {
+    sourceDate: "2026-07-11", sourceType: "内部直播 + 深度笔记",
+    weekDiscipline: "本周任务:减非主线释放弹药,等 7/23 谷歌财报开奖方向。不追涨杀跌,每笔下注问自己输不输得起。",
+    perHolding: {
+      "00700.HK":{tag:"hold",title:"中概龙头 · 反弹减/破位止损",quote:"(v711)中概核心看腾讯——它是中概和恒科的风向标。好事是日线突破 90 日线,摸前高 485,但坏事是下周进入财报回购静默期(不能回购)",trigger:"腾讯突破 HK$485 → 中概反转确认;摸不破就震荡;回购静默期是关键观察窗口",risk:"800 股约 HKD 36.5 万是你最大单票敞口,集中度极高;浮亏较大",action:"反弹到 <span class='num'>HK$475+</span> 减 100-200 股降集中度;跌破 <span class='num'>HK$450</span> 无条件减 300 股。<span class='hi'>绝不加仓</span>(TJ:突破 485 前追中概都是骗炮)"},
+      "01810.HK":{tag:"exit",title:"TJ 明确偏空 · 建议出清",quote:"(v711)绝对没干过高位买小米这种事,我是隐形的米黑。小米增发那天我发了视频,大股东最了解公司",trigger:"TJ 长期偏空 + 已破前低 + 大股东刚增发抽血;两个账户合计 1,600 股敞口不小",risk:"继续跌破 HK$25 加速下跌;700 股是BOCI账户里唯一港股",action:"反弹到 <span class='num'>HK$27</span> 分批清;BOCI 400 股先减;跌破 <span class='num'>HK$24</span> 无条件砍"},
+      "CRM":{tag:"trim",title:"软件还债 · 反弹减",quote:"(v714)AVGO/CRWD 财报暴雷,软件 AI 受益故事被打破,阶段性属于软件在还债",trigger:"AVGO 盘后重挫 + CRWD ARR 不及预期;SaaS 估值中枢下移",risk:"30 股小仓浮亏可控,但继续占用弹药",action:"反弹回成本 <span class='num'>$193</span> 附近分批减/清,释放弹药转投 TJ 主线"},
+      "ETN":{tag:"hold",title:"电力主线 · 压舱石持有",quote:"(v714)电力液冷今晚也都跟跌,只是波动小一点——跌幅最小=资金不愿走,是最健康主线",trigger:"+170 美元浮盈,攻守兼备;基本面订单能见度高",risk:"10Y 收益率飙升对资本开支型公司有估值压制,但远期订单确定性好",action:"维持 15 股不加不减。跌破 <span class='num'>$395</span> 减半;站上 <span class='num'>$450+</span> 部分锁利"},
+      "GEV":{tag:"hold",title:"能源装备 · 持有观察",quote:"(v714)电力是所有 AI 里面为数不多走的好的板块",trigger:"+30 浮盈小仓位,属于电力大主线;与 ETN 同方向",risk:"5 股仓位极小,风险有限;aipo etf 仍受资金抱团",action:"维持 5 股;跌破 <span class='num'>$1000</span> 减半"},
+      "GOOGL":{tag:"trim",title:"软件还债+数据中心禁令 · 减仓警戒",quote:"(v714)AVGO 盘后重挫,亲口承认谷歌要搞供应链多元化(市场最不想听);CRWD ARR 不及预期跟跌,软件集体还债。🆕 0714 WSJ:纽约州行政令禁新建大型数据中心(对 GCP 物理扩张额外逆风)",trigger:"AVGO 确认软件还债 + 纽约数据中心禁令(物理层面新逆风);7/23 谷歌财报是最大鬼故事出清节点",risk:"重仓 250 股(USD 8.9 万),ROI 已浮亏;10Y 飙升+数据中心禁令进一步压制",action:"<span class='hi'>绝不补仓</span>;反弹到 <span class='num'>$393</span>(成本)可减 30-50 股;跌破 <span class='num'>$355</span> 再减;等 7/23 开奖"},
+      "MSFT":{tag:"watch",title:"软件逆风 · 小仓不动",quote:"(v714)软件 AI 受益故事被打破,阶段性还债",trigger:"AVGO 带崩软件抱团;Copilot/Azure 叙事短期承压",risk:"25 股市值约 US$9,600,仓位极小,没必要在逆风板块加",action:"维持 25 股,<span class='hi'>不加</span>;跌破 <span class='num'>$370</span> 减半"},
+      "SPCX":{tag:"exit",title:"商业航天 · 反弹即清(强化)",quote:"(v714)SpaceX IPO 越近抱团越松,动量反转+利率冲击;商业航天无基本面,估值高",trigger:"TJ 反复警示商业航天是量化盘;SpaceX IPO 落地前抱团持续松动",risk:"5 股浮盈 +723 USD 是好时机锁利;持有到 IPO 窗口收益极为不确定",action:"<span class='hi'>反弹到 $145+ 清仓锁利</span>;跌破 <span class='num'>$135</span> 无条件砍"},
+      "NIO":{tag:"trim",title:"非主线 · 建议逐步减仓",quote:"(v711)TJ 本周未点名蔚来;TJ 两条主线是真价值和 AI,新能源车都不在",trigger:"3000 股占 BOCI 仓位约 40%,是重仓非主线;ROI -8.1%",risk:"持续占用弹药;整个新能源车板块不在 TJ 视野内",action:"反弹到 <span class='num'>$5.0-5.2</span>(接近成本)分批减 1000-1500 股;跌破 <span class='num'>$4.6</span> 不追加"},
+      "SKHY":{tag:"buy",title:"加仓看好 · SK -15% 是筹码事件",quote:"(v713)KOSPI 涨 8.95% 月 K 对标 2019 NVDA。(v714)卖方解读:SK -15% 是定价结构问题不是供需改变,长期逻辑不变。三重放大:预期锚定+ADR 筹码再平衡+韩国杠杆 ETF 负反馈",trigger:"SK -15% 后估值更便宜(P/E 8-10x);中长期 AI 存储结构性增长核心逻辑没变;Tower Semi 获 METI 13 亿支持扩产硅光子(产业催化密集)",risk:"短期仍可能再跌(杠杆 ETF 去化未完);ADR 筹码消化需要时间;等第一次反弹再回踩不破前低才是右侧",action:"维持 50 股;<span class='hi'>回踩 $165</span> 加 20-30 股试仓;<span class='hi'>跌破 $155</span> 停止加仓;<span class='hi'>反弹 $185+</span> 分批锁 20-30%;美光 MU 无 LTA 锁价问题可作补充"},
+      "FCX":{tag:"watch",title:"等企稳后再上仓",quote:"(v713)有色是本次真金白银在吸金;等有色企稳后再上仓。(v714)黄金冲夜盘破新纪录,贵金属整体避险主线成立",trigger:"TJ 明确说要等企稳;不加也不减是最优解",risk:"短期仍有反复;铜价对全球经济敏感",action:"维持 70 股;<span class='hi'>不追加</span>;跌破 <span class='num'>$58</span> 减半"},
+      "NBIS":{tag:"watch",title:"Meta 利空出清后看后续",quote:"(v714)Nebius 破位了但涨回 5 日线上方,meta 利空基本出清,走一步看一步",trigger:"Meta 鬼故事已基本出清;Nebius 涨回 5 日线是短期正面",risk:"小仓位;赌财报属性强;TJ 未给强指引",action:"维持 20 股不加;跌破 <span class='num'>$200</span> 减半;站上 <span class='num'>$240</span> 加 5-10 股"},
+      "XE":{tag:"watch",title:"电力主线外延 · 小仓底拿",quote:"(v714)美股电力设备 AIPU 是美股里为数不多的好板块",trigger:"TJ 直接背书的是 AIPU ETF;X-Energy 属核电外延",risk:"核电赛道催化剂稀疏;ROI -2.4% 是持仓里最抗的",action:"维持 130 股;跌破 <span class='num'>$15</span> 减半;站上 <span class='num'>$18</span> 加 30-50;想加大电力主仓位优先买 AIPU ETF 或 ETN"},
+      "03033.HK":{tag:"watch",title:"恒科 ETF · 跟腾讯 · 弱势不加",quote:"(v714)中概龙头跌出价值但技术弱,不知道啥时候能涨;腾讯突破 HK$485 恒科才有望右侧",trigger:"腾讯突破 HK$485 → 恒科可加;摸不破就震荡",risk:"宽基 ETF 下行有限;2200 股市值约 HKD 10,120,<span class='hi'>不要主动补仓</span>",action:"维持 2,200 股;腾讯突破 <span class='num'>HK$485</span> 站稳可加 500 股;跌破 <span class='num'>HK$4.55</span> 减半"}
+    }
+  }
+};
+
+var _TJ_MERGED = TJ_ADVICE.baseline;
+</script>
+
+<script>
+(function BentoEngine(){
+var prevPriceCache={};var accountAssetCache={futu:null,boci:null};
+var assetSeries=[];var anchorUSD=null;
+
+function renderAll(quotes){
+  var FX=CONFIG.fxUSDHKD;
+  var accts={futu:{mktUSD:0,cashUSD:CONFIG.accounts.futu.cashUSD+CONFIG.accounts.futu.cashHKD/FX,list:[]},boci:{mktUSD:0,cashUSD:CONFIG.accounts.boci.cashUSD+CONFIG.accounts.boci.cashHKD/FX,list:[]}};
+  var gMkt=0,gCost=0,gToday=0,gPL=0;
+  CONFIG.holdings.forEach(function(h){
+    var tc=toTencentCode(h.symbol,h.market);var q=quotes[tc];if(!q)return;
+    pushHistory(tc,q.price);
+    var fl="";if(prevPriceCache[tc]!==undefined){if(q.price>prevPriceCache[tc])fl="flash-up";else if(q.price<prevPriceCache[tc])fl="flash-down"}prevPriceCache[tc]=q.price;
+    var isUS=h.market==="US",toUSD=isUS?1:(1/FX);
+    var mvL=q.price*h.shares,mvU=mvL*toUSD,cu=(h.costPrice*h.shares)*toUSD,pl=mvU-cu,td=(q.change*h.shares)*toUSD,roi=cu>0?(pl/cu*100):0;
+    var it={h:h,q:q,mktValLocal:mvL,mktValUSD:mvU,plUSD:pl,todayPLUSD:td,roi:roi,flashClass:fl,tc:tc};
+    if(accts[h.account]){accts[h.account].mktUSD+=mvU;accts[h.account].list.push(it)}
+    gMkt+=mvU;gCost+=cu;gToday+=td;gPL+=pl;
+  });
+  ["futu","boci"].forEach(function(aId){
+    var a=accts[aId],tU=a.mktUSD+a.cashUSD;
+    document.getElementById(aId+"_total").textContent="$"+fmt(tU,0);
+    document.getElementById(aId+"_mkt").textContent="$"+fmt(a.mktUSD,0);
+    document.getElementById(aId+"_cash").textContent="$"+fmt(a.cashUSD,0);
+    var tgt=CONFIG.accounts[aId].targetUSD||0;
+    var pct=tgt>0?(tU/tgt*100):0;
+    var pctEl=document.getElementById(aId+"_goalPct");
+    if(pctEl){pctEl.textContent="→ "+pct.toFixed(1)+"%";pctEl.style.color=pct>=100?"var(--down)":(pct>=90?"var(--yellow)":"var(--muted)")}
+    var box=document.getElementById("bento_"+aId);
+    if(box&&accountAssetCache[aId]!==null){if(tU>accountAssetCache[aId]){box.classList.remove("pulse-up","pulse-down");void box.offsetWidth;box.classList.add("pulse-up")}else if(tU<accountAssetCache[aId]){box.classList.remove("pulse-up","pulse-down");void box.offsetWidth;box.classList.add("pulse-down")}}accountAssetCache[aId]=tU;
+    a.list.sort(function(x,y){return y.mktValUSD-x.mktValUSD});
+    var lc=document.getElementById(aId+"_list");
+    lc.innerHTML=a.list.map(function(it){
+      var h=it.h,q=it.q,pc=it.plUSD>=0?"up":"down",cc=q.changePct>=0?"up":"down";
+      return'<div class="stk-row"><div class="stk-cell"><div class="stk-main-title">'+h.name+'</div><div class="stk-sub-title">'+h.symbol+' · <span class="muted">'+h.sector+'</span></div></div><div class="stk-cell right"><div class="stk-primary-num mono mask">'+it.h.shares+'</div><div class="stk-secondary-num mono">成本 '+fmt(h.costPrice,1)+'</div></div><div class="stk-cell right"><div class="stk-primary-num mono '+it.flashClass+'">'+fmt(q.price,2)+'</div><div class="stk-secondary-num">'+sparkSVG(it.tc,q.changePct)+'</div></div><div class="stk-cell right"><div class="stk-primary-num mono '+cc+'">'+(q.changePct>=0?"+":"")+q.changePct.toFixed(2)+'%</div><div class="stk-secondary-num mono '+cc+'">'+(q.change>=0?"+":"")+fmt(q.change,1)+'</div></div><div class="stk-cell right"><div class="stk-primary-num mono '+pc+'">'+(it.plUSD>=0?"+":"")+fmt(it.plUSD,0)+'</div><div class="stk-secondary-num mono '+pc+'">'+(it.roi>=0?"+":"")+it.roi.toFixed(1)+'%</div></div></div>';
+    }).join("");
+  });
+  var gc=accts.futu.cashUSD+accts.boci.cashUSD,gtU=gMkt+gc;
+  document.getElementById("totalUSD").textContent=fmt(gtU,0);
+  document.getElementById("totalHKD").textContent=fmt(gtU*FX,0);
+  document.getElementById("mktValUSD").textContent="$"+fmt(gMkt,0);
+  document.getElementById("cashTotalUSD").textContent=fmt(gc,0);
+  var tp=document.getElementById("totalPL");tp.textContent=(gPL>=0?"+":"")+fmt(gPL,0);tp.className="k-val mono mask "+(gPL>=0?"up":"down");
+  var tpP=gCost>0?(gPL/gCost*100):0;document.getElementById("totalPLPct").textContent=(tpP>=0?"+":"")+tpP.toFixed(2)+"%";document.getElementById("totalPLPct").className="mono "+(tpP>=0?"up":"down");
+  var tdE=document.getElementById("todayPL");tdE.textContent=(gToday>=0?"+":"")+fmt(gToday,0);tdE.className="k-val mono mask "+(gToday>=0?"up":"down");
+  var yes=gMkt-gToday,tdP=yes>0?(gToday/yes*100):0;document.getElementById("todayPLPct").textContent=(tdP>=0?"+":"")+tdP.toFixed(2)+"%";document.getElementById("todayPLPct").className="mono "+(gToday>=0?"up":"down");
+  var gp=CONFIG.targetUSD>0?(gtU/CONFIG.targetUSD*100):0;document.getElementById("goalPct").textContent=gp.toFixed(1)+"%";document.getElementById("goalBar").style.width=Math.min(100,gp).toFixed(1)+"%";document.getElementById("goalDiff").textContent=fmt(Math.max(0,CONFIG.targetUSD-gtU),0);
+  renderWatch(quotes);renderTJActions([].concat(accts.futu.list).concat(accts.boci.list));
+  if(anchorUSD===null)anchorUSD=gtU;assetSeries.push({t:Date.now(),v:gtU});if(assetSeries.length>50)assetSeries.shift();
+  var de=document.getElementById("heroDelta");if(de){var da=gtU-anchorUSD,dp=anchorUSD>0?(da/anchorUSD*100):0;de.innerHTML='<span class="'+(da>=0?"up":"down")+'">'+(da>=0?"▲":"▼")+" "+(da>=0?"+":"")+fmt(da,0)+" USD ("+dp.toFixed(3)+'%)</span> <span class="d-meta">· 自本次页面打开以来</span>'}
+  var che=document.getElementById("heroChart");if(che&&assetSeries.length>=2){var vs=assetSeries.map(function(p){return p.v});var mn=Math.min.apply(null,vs),mx=Math.max.apply(null,vs);var pts=assetSeries.map(function(p,i){return(i===0?"M":"L")+(i*(1000/(assetSeries.length-1))).toFixed(1)+" "+(54-((p.v-mn)/((mx-mn)||1))*46).toFixed(1)}).join(" ");che.innerHTML='<svg viewBox="0 0 1000 54" preserveAspectRatio="none"><path d="'+pts+'" fill="none" stroke="'+(vs[vs.length-1]>=vs[0]?"var(--up)":"var(--down)")+'" stroke-width="1.5"/></svg>';document.getElementById("chartHigh").textContent=fmt(mx,0);document.getElementById("chartLow").textContent=fmt(mn,0)}
+}
+
+function renderWatch(quotes){var g=document.getElementById("watchGrid");g.innerHTML=CONFIG.watchlist.map(function(w){var tc=toTencentCode(w.symbol,w.market),q=quotes[tc];if(!q)return'<div class="watch-card"><div class="w-name">'+w.name+'</div><div class="w-code">'+w.symbol+'</div><div class="w-price muted">—</div><div class="w-chg muted">加载中</div></div>';return'<div class="watch-card"><div class="w-name">'+w.name+'</div><div class="w-code">'+w.symbol+'</div><div class="w-price mono">'+fmt(q.price,2)+'</div><div class="w-chg mono '+(q.changePct>=0?"up":"down")+'">'+(q.changePct>=0?"+":"")+q.changePct.toFixed(2)+"%</div></div>"}).join("")}
+
+function renderTJActions(allItems){
+  var per=_TJ_MERGED&&_TJ_MERGED.perHolding?_TJ_MERGED.perHolding:{};
+  var TAG={buy:{text:"BUY · 加仓看好",cls:"tj-buy"},hold:{text:"HOLD · 继续持有",cls:"tj-hold"},watch:{text:"WATCH · 观察",cls:"tj-watch"},trim:{text:"TRIM · 建议减仓",cls:"tj-trim"},exit:{text:"EXIT · 建议出清",cls:"tj-exit"}};
+  var al=document.getElementById("actionList");
+  al.innerHTML=allItems.map(function(r){
+    var tj=per[r.h.symbol]||null,rc=signCls(r.roi),tc=signCls(r.q.changePct);
+    if(tj){var m=TAG[tj.tag]||TAG.watch;
+      return'<div class="action '+m.cls+'"><div class="a-head"><span class="a-tag"><span class="a-tag-dot"></span>'+m.text+'</span><span class="a-metric">ROI <span class="m-val '+rc+'">'+signPrefix(r.roi)+r.roi.toFixed(1)+'%</span> &nbsp;·&nbsp; TODAY <span class="m-val '+tc+'">'+signPrefix(r.q.changePct)+r.q.changePct.toFixed(2)+'%</span></span></div><div class="a-name"><span class="a-title">'+tj.title+'</span><span class="a-stock">'+r.h.name+'<span class="a-sym"> '+r.h.symbol+'</span></span></div><div class="a-quote">'+tj.quote+'</div><div class="a-fieldset"><div class="a-row"><span class="a-label">触发</span><span class="a-text">'+tj.trigger+'</span></div><div class="a-row"><span class="a-label">风险</span><span class="a-text">'+tj.risk+'</span></div><div class="a-row"><span class="a-label">动作</span><span class="a-text">'+tj.action+'</span></div></div></div>';
+    }
+    var a={type:"hold",title:"维持原仓",body:"价格当前处于健康波幅中，无需惊慌。TJ 未覆盖此标的，按规则自动生成。"};
+    if(r.roi>=25){a.type="sell";a.title="分批减持止盈";a.body='已大幅累计浮盈 <span class="num">'+r.roi.toFixed(1)+'%</span>。'}else if(r.q.changePct<=-4){a.type="wait";a.title="下杀不急于抄底";a.body='今日剧烈下震 <span class="num">'+r.q.changePct.toFixed(1)+'%</span>。'}
+    return'<div class="action '+a.type+'"><div class="a-head"><span class="a-tag"><span class="a-tag-dot"></span>'+a.type.toUpperCase()+'</span><span class="a-metric">今日: <span class="'+tc+'">'+r.q.changePct.toFixed(1)+'%</span></span></div><div class="a-name">'+a.title+' <span class="a-stock">'+r.h.name+' ('+r.h.symbol+')</span></div><div class="a-body">'+a.body+'</div></div>';
+  }).join("");
+}
+
+function renderTJStrip(){
+  var ba=TJ_ADVICE.baseline;
+  document.getElementById("tjDiscipline").textContent=ba.weekDiscipline||"—";
+  var mt=document.getElementById("tjFreshness");
+  try{var vu=new Date(TJ_ADVICE.validUntil+"T23:59:59"),now=new Date(),dl=Math.ceil((vu-now)/86400000),st=dl>0?"新鲜度: 还剩 "+dl+" 天":"已过期 "+(-dl)+" 天,等新 TJ 输入",sc=dl>0?"tj-fresh":"tj-stale";
+  mt.innerHTML='<div style="text-align:right"><span class="a-source v-intra">'+TJ_ADVICE.intradayVer+'</span> · <span class="a-source">'+TJ_ADVICE.baselineVer+'</span><br><span style="font-size:10px">TJ '+ba.sourceDate+'</span><br><span class="'+sc+'">'+st+'</span></div>';
+  document.getElementById("tjHint").textContent="基于 TJ "+TJ_ADVICE.baselineVer+"("+ba.sourceDate+" "+ba.sourceType+") + "+TJ_ADVICE.intradayVer+"(0714 盘中+新闻) · 有效至 "+TJ_ADVICE.validUntil}catch(e){mt.textContent=ba.sourceDate||"—"}
+}
+try{renderTJStrip()}catch(e){console.error(e)}
+document.getElementById("clock").textContent=new Date().toLocaleTimeString("zh-CN",{hour12:false});setInterval(function(){document.getElementById("clock").textContent=new Date().toLocaleTimeString("zh-CN",{hour12:false})},1000);
+
+async function refresh(){var cs=new Set();CONFIG.holdings.forEach(function(h){cs.add(toTencentCode(h.symbol,h.market))});CONFIG.watchlist.forEach(function(w){cs.add(toTencentCode(w.symbol,w.market))});var all=await fetchQuotes(Array.from(cs));renderAll(all)}
+document.getElementById("privacyBtn").addEventListener("click",function(){var is=document.body.classList.toggle("masked");document.getElementById("privacyLabel").textContent=is?"显示":"隐藏";document.getElementById("eyeOpen").style.display=is?"none":"";document.getElementById("eyeClosed").style.display=is?"":""});
+
+refresh();setInterval(refresh,CONFIG.refreshMs);
+})();
+</script>
+</body>
+</html>
